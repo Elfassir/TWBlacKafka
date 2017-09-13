@@ -40,6 +40,7 @@ import java.util.stream.Stream;
 @SpringBootApplication(exclude = MetricFilterAutoConfiguration.class)
 public class KafDrop
 {
+	//trying to put in Git
    private final static Logger LOG = LoggerFactory.getLogger(KafDrop.class);
 
    public static void main(String[] args)
