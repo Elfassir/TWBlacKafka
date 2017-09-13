@@ -1,0 +1,10 @@
+.project
+.metadata
+.classpath
+.settings/
+**/Thumbs.db
+target
+*.iml
+*.iws
+*.ipr
+.idea/
