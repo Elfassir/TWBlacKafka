@@ -77,13 +77,9 @@ public class ConsumerPartitionVO
 
    public long getLag()
    {
-      if (size < 0 || firstOffset < 0)
+      if (size < 0 || firstOffset < 0 || offset < 0)
       {
          return 0;
-      }
-      else if (offset < firstOffset)
-      {
-         return size - firstOffset;
       }
       else
       {

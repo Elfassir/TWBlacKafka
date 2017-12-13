@@ -38,8 +38,12 @@ public class ConsumerPartitionVOTest
       doLagTest(0, 0, 0, 0);
       doLagTest(-1, -1, -1, 0);
       doLagTest(5, 10, 8, 2);
-      doLagTest(5, 10, 2, 5);
-      doLagTest(6, 6, 2, 0);
-      doLagTest(5, 10, -1, 5);
+      //doLagTest(5, 10, 2, 5);
+      doLagTest(5, 10, 2, 8);
+      //doLagTest(6, 6, 2, 0);
+      doLagTest(6, 6, 2, 4);
+      //doLagTest(5, 10, -1, 5);
+      //doLagTest(5, 10, -1, 11);
+      doLagTest(5, 10, -1, 0);
    }
 }

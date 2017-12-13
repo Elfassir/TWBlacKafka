@@ -26,10 +26,19 @@ public class TopicVO implements Comparable<TopicVO>
    private String name;
    private Map<Integer, TopicPartitionVO> partitions = new TreeMap<>();
    private Map<String, Object> config = new TreeMap<>();
+   private Set<ConsumerVO> consumers = new HashSet<>();
    // description?
    // partition state
    // delete supported?
 
+
+   public Set<ConsumerVO> getConsumers() {
+	   return consumers;
+   }
+
+   public void setConsumers(Set<ConsumerVO> consumers) {
+	   this.consumers = consumers;
+   }
 
    public TopicVO(String name)
    {

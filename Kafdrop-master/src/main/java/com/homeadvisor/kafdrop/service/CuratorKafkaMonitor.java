@@ -33,7 +33,6 @@ import kafka.admin.ConsumerGroupCommand;
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions;
 import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService;
 import kafka.admin.ConsumerGroupCommand.LogEndOffsetResult;
-//import kafka.api.ConsumerMetadataRequest;
 import kafka.api.GroupCoordinatorRequest;
 import kafka.api.GroupCoordinatorResponse;
 import kafka.api.PartitionOffsetRequestInfo;
@@ -75,6 +74,11 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.management.MBeanServerConnection;
+import javax.management.ObjectName;
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorFactory;
+import javax.management.remote.JMXServiceURL;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -316,9 +320,13 @@ public class CuratorKafkaMonitor implements KafkaMonitor
    public List<TopicVO> getTopics()
    {
       validateInitialized();
-      return getTopicMetadata().values().stream()
-         .sorted(Comparator.comparing(TopicVO::getName))
-         .collect(Collectors.toList());
+      List<TopicVO> topicList = getTopicMetadata().values().stream()
+    	         .sorted(Comparator.comparing(TopicVO::getName))
+    	         .collect(Collectors.toList());
+      
+      setConsumersForAllTopics(topicList);
+      
+      return topicList;
    }
 
    @Override
@@ -705,6 +713,69 @@ public class CuratorKafkaMonitor implements KafkaMonitor
 	   return AdminClient.create(props);
    }
    
+   private Map<String, List<ConsumerGroupVersion10>> getSpecificConsumerGroupDescription(String groupId)
+   {
+	   Map<String, List<ConsumerGroupVersion10>> result = new HashMap<String, List<ConsumerGroupVersion10>>();
+	   
+	   List<ConsumerSummary> commandList = getConsumersDescriptionByGroupId(groupId);
+	   
+	   String owner;
+	   String topicName;
+	   int partition;
+	   OffsetAndMetadata partitionOffset;
+	   int logEndOffset;
+	   int currentOffset;
+	   int lag;
+	   ConsumerGroupVersion10 currConsumerGroup;
+	   List<ConsumerGroupVersion10> consumerGrouplist;
+	   for(ConsumerSummary consumerSummary: commandList)
+	   {
+		   owner = consumerSummary.clientId()+"_"+consumerSummary.clientHost();
+		   
+		   TopicPartition topicPartition;
+		   scala.collection.Iterator<TopicPartition> iterator = consumerSummary.assignment().iterator();
+		   while(iterator.hasNext())
+		   {
+			   topicPartition = iterator.next();
+			   
+
+			   topicName = topicPartition.topic();
+			   partition = topicPartition.partition();
+			   partitionOffset = getKafkaConsumer(groupId).committed(new TopicPartition(topicName,partition));
+			   logEndOffset = (int)getLogEndOffset(topicName, partition,groupId);
+			   if(partitionOffset != null){
+				   currentOffset = (int)partitionOffset.offset();
+					   lag = logEndOffset - currentOffset;
+			   }else{
+				   currentOffset = -1;
+				   lag = -1;
+			   }
+			   
+			   currConsumerGroup = buildAllConsumerGroupData(topicName,
+					   partition,
+					   currentOffset,
+					   logEndOffset,
+					   lag,
+					   owner);
+			   
+			   if (result.containsKey(groupId))
+			   {
+				   consumerGrouplist = result.get(groupId);
+				   consumerGrouplist.add(currConsumerGroup);
+			   }
+			   else
+			   {
+				   consumerGrouplist = new ArrayList<CuratorKafkaMonitor.ConsumerGroupVersion10>();
+				   consumerGrouplist.add(currConsumerGroup);
+				   result.put(groupId, consumerGrouplist);
+			   }
+		   
+		   }
+		   kafkaConsumer = null;
+	   }
+	   
+	   return result;
+   }
     
    private Map<String,ConsumerGroupVersion10> getAllOrSpecificConsumerGroupDescription(String groupId)
    {
@@ -890,6 +961,91 @@ public class CuratorKafkaMonitor implements KafkaMonitor
    
    //---------------------------------------------------------------------------------------------------
   
+   private Map<String, TopicVO> createMapFromTopicList(List<TopicVO> topics)
+   {
+	   Map<String, TopicVO> result = new HashMap<String, TopicVO>();
+	   
+	   for (TopicVO topic : topics)
+	   {
+		   result.put(topic.getName(), topic);
+	   }
+	   return result;
+   }
+   
+   private Map<String, List<ConsumerGroupVersion10>> collectAllConsumers()
+   {
+	   Map<String, List<ConsumerGroupVersion10>> result = new HashMap<String, List<ConsumerGroupVersion10>>();
+	   
+	   final List<String> allGroupIdsList = getConsumersString();
+	   
+	   for (String groupId : allGroupIdsList)
+	   {
+		   result.putAll(getSpecificConsumerGroupDescription(groupId));
+		   
+	   }
+	   return result;
+   }
+   public void setConsumersForAllTopics(List<TopicVO> topics)
+   {
+	   Map<String, TopicVO> topicsMap = createMapFromTopicList(topics);
+	   
+	   Map<String, List<ConsumerGroupVersion10>> consumerMap = collectAllConsumers();
+	   
+	   List<ConsumerGroupVersion10> currConsumerList = null;
+	   String topicName;
+	   TopicVO currTopic;
+	   Set<ConsumerVO> currConsumerVOList;
+	   ConsumerVO consumerVO;
+	   for (Map.Entry<String, List<ConsumerGroupVersion10>> entry : consumerMap.entrySet())
+	   {
+		   currConsumerList = entry.getValue();
+		   for (ConsumerGroupVersion10 consumerGroupDetails : currConsumerList)
+		   {
+			   topicName = consumerGroupDetails.getTopic();
+			   currTopic = topicsMap.get(topicName);
+			   consumerVO = map(entry.getKey(), consumerGroupDetails);
+			   if (isLagExist(topicName, consumerVO))
+			   {
+				   if (currTopic.getConsumers() == null)
+				   {
+					   currConsumerVOList = new HashSet<ConsumerVO>();
+					   currConsumerVOList.add(consumerVO);
+					   currTopic.setConsumers(currConsumerVOList);
+				   }
+				   else
+				   {
+					   currConsumerVOList = currTopic.getConsumers();
+					   currConsumerVOList.add(consumerVO);
+				   }
+			   }
+		   }
+	   }
+   }
+   
+   private boolean isLagExist(String topicName, ConsumerVO consumerVO)
+   {
+	   ConsumerTopicVO consumerTopicVO = consumerVO.getTopic(topicName);
+	   if (consumerTopicVO.getLag() != 0)
+	   {
+		   return true;
+	   }
+	   return false;
+   }
+   private ConsumerVO map(String groupId, ConsumerGroupVersion10 consumerGroupVersion10)
+   {
+	   ConsumerVO consumerVO = new ConsumerVO(groupId);
+	   ConsumerPartitionVO consumerPartition = new ConsumerPartitionVO(groupId, consumerGroupVersion10.getTopic(), consumerGroupVersion10.getPartition());
+	   consumerPartition.setOffset(consumerGroupVersion10.getCurrentOffest());
+	   consumerPartition.setSize(consumerGroupVersion10.getLogEndOffset());
+	   consumerPartition.setOwner(consumerGroupVersion10.getOwner());
+	   ConsumerTopicVO consumerTopic = new ConsumerTopicVO(consumerGroupVersion10.getTopic());
+	   Optional<TopicVO> topicForFirstOffset = this.getTopic(consumerTopic.getTopic());
+	   consumerPartition.setFirstOffset(topicForFirstOffset.get().getPartition(consumerGroupVersion10.getPartition()).get().getFirstOffset());
+	   consumerTopic.addOffset(consumerPartition);
+	   consumerVO.addTopic(consumerTopic);
+	   
+	   return consumerVO;
+   }
    @Override
    public List<ConsumerVO> getConsumers(final TopicVO topic)
    {
@@ -951,6 +1107,14 @@ public class CuratorKafkaMonitor implements KafkaMonitor
    @Override
    public Optional<ConsumerVO> getConsumer(String groupId)
    {
+	  /* try
+	   {
+		   jmxManagement();
+	   }
+	   catch(Exception e){
+		   e.printStackTrace();
+	   }*/
+	   
 	   Optional<TopicVO> topicForFirstOffset = null;
 	   ConsumerVO consumer = null;
 	   ConsumerTopicVO consumerTopic = null;
@@ -1567,5 +1731,36 @@ public class CuratorKafkaMonitor implements KafkaMonitor
 	   return result;
    }
    
-*/      
+*/
+   public void jmxManagement() throws Exception 
+   {
+	   JMXConnector jmxConn = null;
+	   try {
+		JMXServiceURL url = new JMXServiceURL("service:jmx:rmi://illnqw1164.corp.amdocs.com:9096/jndi/rmi://illnqw1164.corp.amdocs.com:9096/jmxrmi");
+		jmxConn = JMXConnectorFactory.connect(url, null);
+		
+		MBeanServerConnection mbsConn = jmxConn.getMBeanServerConnection();
+		
+		String objName = "kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions";
+		
+		ObjectName objectName = new ObjectName(objName);
+		
+		KafkaConsumer<String,String> kafkaConsumer = getKafkaConsumer("FWA");
+		
+		String attributeName = "Value";
+		Object value = mbsConn.getAttribute(objectName, attributeName);
+		
+		System.out.println("");
+		
+	} catch (Exception e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
+	   finally {
+		   if (jmxConn != null)
+		   {
+			   jmxConn.close(); 
+		   }	  
+	}
+   }
 }

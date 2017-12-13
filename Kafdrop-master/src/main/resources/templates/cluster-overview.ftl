@@ -54,7 +54,7 @@
                     <th>% Preferred</th>
                     <th># Under Replicated</th>
                     <th>Custom Config?</th>
-                    <#--<th>Consumers</th>-->
+                    <th>Consumers With Lag</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -64,12 +64,22 @@
                 </tr>
                 </#if>
                 <#list topics as t>
+                
                 <tr>
                     <td><a href="/topic/${t.name}">${t.name}</a></td>
                     <td>${t.partitions?size}</td>
                     <td <#if t.preferredReplicaPercent lt 1.0>class="warn"</#if>>${t.preferredReplicaPercent?string.percent}</td>
                     <td <#if t.underReplicatedPartitions?size gt 0>class="warn"</#if>>${t.underReplicatedPartitions?size}</td>
                     <td><@template.yn t.config?size gt 0/></td>
+                    <td>
+                    	<ul class="bs-list flat">
+                			<#list t.consumers![] as c>
+                    			<li>
+                    				<a href="/consumer/${c.groupId}">${c.groupId}</a>
+								</li>                    		
+                    		</#list>
+                		</ul>	
+                    </td>
                     <#--<td>${t.consumers![]?size}</td>-->
                 </tr>
                 </#list>
