@@ -22,37 +22,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.homeadvisor.kafdrop.config.CuratorConfiguration;
-import com.homeadvisor.kafdrop.config.CuratorConfiguration.ZookeeperProperties;
 import com.homeadvisor.kafdrop.model.*;
 import com.homeadvisor.kafdrop.util.BrokerChannel;
 import com.homeadvisor.kafdrop.util.Version;
 
 import kafka.admin.AdminClient;
 import kafka.admin.AdminClient.ConsumerSummary;
-import kafka.admin.ConsumerGroupCommand;
-import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions;
-import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService;
-import kafka.admin.ConsumerGroupCommand.LogEndOffsetResult;
 import kafka.api.GroupCoordinatorRequest;
 import kafka.api.GroupCoordinatorResponse;
 import kafka.api.PartitionOffsetRequestInfo;
-import kafka.cluster.Broker;
 import kafka.cluster.BrokerEndPoint;
-import kafka.cluster.EndPoint;
 import kafka.common.ErrorMapping;
 import kafka.common.TopicAndPartition;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import kafka.coordinator.GroupOverview;
-import kafka.coordinator.GroupSummary;
 import kafka.javaapi.*;
 import kafka.network.BlockingChannel;
 import kafka.server.ConfigType;
-import kafka.server.KafkaConfig;
-import kafka.tools.ConsoleConsumer;
 import kafka.utils.ZKGroupDirs;
 import kafka.utils.ZKGroupTopicDirs;
 import kafka.utils.ZkUtils;
-import scala.collection.immutable.ListMap.Node;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.curator.framework.CuratorFramework;
@@ -63,7 +52,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.tomcat.util.http.fileupload.util.Streams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -81,11 +69,8 @@ import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintStream;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
@@ -112,8 +97,6 @@ public class CuratorKafkaMonitor implements KafkaMonitor
    private TreeCache topicTreeCache;
    private TreeCache consumerTreeCache;
    private NodeCache controllerNodeCache;
-
-   private int controllerId = -1;
 
    private Map<Integer, BrokerVO> brokerCache = new TreeMap<>();
 
@@ -317,7 +300,7 @@ public class CuratorKafkaMonitor implements KafkaMonitor
    }
 
    @Override
-   public List<TopicVO> getTopics()
+   public List<TopicVO> getTopicsWithConsumers()
    {
       validateInitialized();
       List<TopicVO> topicList = getTopicMetadata().values().stream()
@@ -327,6 +310,17 @@ public class CuratorKafkaMonitor implements KafkaMonitor
       setConsumersForAllTopics(topicList);
       
       return topicList;
+   }
+   
+   @Override
+   public List<TopicVO> getTopics()
+   {
+	   validateInitialized();
+	   List<TopicVO> topicList = getTopicMetadata().values().stream()
+	    	         .sorted(Comparator.comparing(TopicVO::getName))
+	    	         .collect(Collectors.toList());
+	      
+	   return topicList;   
    }
 
    @Override
@@ -1750,10 +1744,8 @@ public class CuratorKafkaMonitor implements KafkaMonitor
 		String attributeName = "Value";
 		Object value = mbsConn.getAttribute(objectName, attributeName);
 		
-		System.out.println("");
 		
 	} catch (Exception e) {
-		// TODO Auto-generated catch block
 		e.printStackTrace();
 	}
 	   finally {
