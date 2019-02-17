@@ -99,6 +99,6 @@ public class TopicController
    @RequestMapping(produces = MediaType.APPLICATION_JSON_VALUE, method = RequestMethod.GET)
    public @ResponseBody List<String> getAllTopics() throws Exception
    {
-      return kafkaMonitor.getTopics().stream().map(TopicVO::getName).collect(Collectors.toList());
+      return kafkaMonitor.getTopicsWithConsumers().stream().map(TopicVO::getName).collect(Collectors.toList());
    }
 }

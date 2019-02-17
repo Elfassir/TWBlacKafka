@@ -32,6 +32,8 @@ public interface KafkaMonitor
 
    Optional<BrokerVO> getBroker(int id);
 
+   List<TopicVO> getTopicsWithConsumers();
+   
    List<TopicVO> getTopics();
 
    Optional<TopicVO> getTopic(String topic);

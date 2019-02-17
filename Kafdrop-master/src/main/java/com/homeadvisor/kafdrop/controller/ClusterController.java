@@ -52,7 +52,7 @@ public class ClusterController
    {
       model.addAttribute("zookeeper", zookeeperProperties);
       model.addAttribute("brokers", kafkaMonitor.getBrokers());
-      model.addAttribute("topics", kafkaMonitor.getTopics());
+      model.addAttribute("topics", kafkaMonitor.getTopicsWithConsumers());
       return "cluster-overview";
    }
 
@@ -68,7 +68,7 @@ public class ClusterController
 
       vo.zookeeper = zookeeperProperties;
       vo.brokers = kafkaMonitor.getBrokers();
-      vo.topics = kafkaMonitor.getTopics();
+      vo.topics = kafkaMonitor.getTopicsWithConsumers();
 
       return vo;
    }

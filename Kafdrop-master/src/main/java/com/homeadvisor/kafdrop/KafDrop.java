@@ -50,6 +50,17 @@ public class KafDrop
          .listeners(new EnvironmentSetupListener(),
                     new LoggingConfigurationListener())
          .run(args);
+      
+      LOG.info("Opening defualt browser");
+      
+      try {
+		Runtime.getRuntime().exec("rundll32 url.dll,FileProtocolHandler " + "http://localhost:9000");
+	} catch (IOException e) {
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
+      
+      
    }
 
    private static class LoggingConfigurationListener implements ApplicationListener<ApplicationEnvironmentPreparedEvent>, Ordered
@@ -100,9 +111,7 @@ public class KafDrop
          {
             System.setProperty(PROP_SPRING_BOOT_LOG_LEVEL, "DEBUG");
          }
-         
      }
-
    }
 
    private static class EnvironmentSetupListener implements ApplicationListener<ApplicationEnvironmentPreparedEvent>, Ordered
